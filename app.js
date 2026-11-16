@@ -413,7 +413,7 @@ function openSettings() {
       <li>Deschide aplicația în <b>Safari</b>.</li><li>Apasă butonul <b>Partajează</b> (pătratul cu săgeată).</li>
       <li>Alege <b>Adaugă pe ecranul principal</b>.</li></ol></details>
     <button class="btn danger block" data-action="reset">Șterge toate datele</button>
-    <p class="hint muted center">Bugetul Meu · versiunea ${APP_VERSION}</p>
+    <p class="hint muted center">ProBudget · versiunea ${APP_VERSION}</p>
     <div class="actions"><button class="btn" data-action="close-sheet">Închide</button></div>`);
 }
 
@@ -608,7 +608,7 @@ function saveReceipt() {
 
 /* ---------- backup ---------- */
 async function exportData() {
-  const name = `bugetul-meu-backup-${todayISO()}.json`;
+  const name = `probudget-backup-${todayISO()}.json`;
   const blob = new Blob([JSON.stringify(state)], {type: 'application/json'});
   const file = new File([blob], name, {type: 'application/json'});
   if (navigator.canShare && navigator.canShare({files: [file]})) {

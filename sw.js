@@ -1,7 +1,7 @@
 // Service worker: aplicația merge și fără internet după prima deschidere.
-const CACHE = 'bugetul-meu-v2';
+const CACHE = 'bugetul-meu-1.0'; // schimbă la fiecare versiune
 const SHELL = ['./', './index.html', './styles.css', './app.js', './bank.js', './manifest.json',
-  './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+  './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -16,7 +16,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin === location.origin) {
     // fișierele aplicației: întâi rețeaua (ca să primești update-uri), apoi cache-ul dacă ești offline
-    e.respondWith(fetch(req).then(res => {
+    e.respondWith(fetch(req, {cache: 'no-cache'}).then(res => {
       const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res;
     }).catch(() => caches.match(req, {ignoreSearch: true}).then(r => r || caches.match('./index.html'))));
   } else if (/jsdelivr|tessdata|projectnaptha/.test(url.host)) {
