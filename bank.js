@@ -85,11 +85,19 @@ function merchantKey(desc) {
     && !/^(TO|FROM|CATRE|LTD|SRL|SA|SC|RO|BUCURESTI|ROMANIA|ROU|ROM|PAYMENT|PLATA)$/.test(x));
   return w.slice(0, 2).join(' ');
 }
+// cheia pentru transferuri: fără direcție (spre/din/către/de la), ca să prindă ambele sensuri
+function transferKey(desc) {
+  const w = strip(desc).replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(x => x.length > 1 && !/^\d+$/.test(x)
+    && !/^(TO|FROM|CATRE|SPRE|DIN|DE|LA|IN|INTO|TRANSFER|TRANSFERAT|CONTUL|CONT|ACCOUNT|MY|MEU|PAYMENT|PLATA|RON|EUR|USD)$/.test(x));
+  return w.slice(0, 2).join(' ');
+}
 const prettyName = d => d.replace(/\s+\d{3,}.*$/, '').replace(/\*/g, ' ').replace(/\s+/g, ' ').trim()
   .toLowerCase().replace(/(^|[\s&.-])\S/g, c => c.toUpperCase()).slice(0, 40);
 
 function classify(desc, type, rtype) {
   const U = strip(desc), key = merchantKey(desc), rules = state.rules || {};
+  const tk = transferKey(desc);
+  if (tk && rules['ign:' + tk]) return {category: '__ignore', note: '', known: true};
   const rule = rules[key] || rules[key.split(' ')[0]];
   if (rule && (rule.category === '__ignore' || CATS[type].includes(rule.category))) return {...rule, known: true};
   if (type === 'income') {
@@ -102,8 +110,8 @@ function classify(desc, type, rtype) {
 }
 function isInternal(rtype, product, desc) {
   const U = strip(desc), T = strip(rtype), P = strip(product);
-  return /EXCHANGE|SCHIMB/.test(T) || /SAVINGS|ECONOMII|DEPOSIT|POCKET/.test(P)
-    || /POCKET|VAULT|SAVINGS|PUSCULITA|SEIF|^TO RON|^TO EUR|^TO USD|EXCHANGED TO|SCHIMBAT IN/.test(U)
+  return /EXCHANGE|SCHIMB/.test(T) || /SAVINGS|ECONOMII|ECONOMISIRE|DEPOSIT|DEPOZIT|POCKET|VAULT|SEIF|FLEXIBLE|INSTANT ACCESS/.test(P)
+    || /POCKET|VAULT|SAVINGS|ECONOMII|ECONOMISIRE|PUSCULITA|SEIF|DEPOZIT|INSTANT ACCESS|FLEXIBLE CASH|INTEREST ACCOUNT|^TO RON|^TO EUR|^TO USD|^CATRE RON|^CATRE EUR|EXCHANGED TO|SCHIMBAT IN|ROUND.?UP|ROTUNJIRE|RETRAGERE DIN|DEPUNERE IN|WITHDRAW(AL)? FROM|DEPOSIT TO/.test(U)
     || /TOPUP|TOP-UP|ALIMENTARE/.test(T);
 }
 
@@ -196,7 +204,8 @@ function impRow(r, i) {
     <div class="imp-top"><label class="chk"><input type="checkbox" class="imp-inc" ${r.include ? 'checked' : ''}></label>
       <span class="grow"><b>${esc(r.desc)}</b><small>${fmtDate(r.date)}${r.cur !== 'RON' ? ` · ${r.cur}` : ''}${r.pending ? ' · în așteptare' : ''}${!r.known ? ' · <span class="warn">nerecunoscut, alege tu</span>' : ''}</small></span>
       <span class="amt ${r.type}">${r.type === 'income' ? '+' : '−'}${fmt(r.amount)}</span></div>
-    <div class="imp-edit"><select class="imp-cat">${opts}</select><input class="imp-note" value="${esc(r.note)}" placeholder="Detaliu"></div></div>`;
+    <div class="imp-edit"><select class="imp-cat">${opts}</select><input class="imp-note" value="${esc(r.note)}" placeholder="Detaliu"></div>
+    ${r.status === 'new' ? `<button class="ign-btn" data-action="bank-ignore" data-i="${i}">↔ E transfer între conturile mele, ignoră mereu</button>` : ''}</div>`;
 }
 function viewImport() {
   const I = ui.imp, R = I.rows;
@@ -216,8 +225,10 @@ function viewImport() {
     <section class="card"><h2>Noi <small>verifică categoriile</small></h2>${nw.length ? nw.map(([r, i]) => impRow(r, i)).join('') : empty('Nimic nou: le aveai pe toate. 👌')}</section>
     ${mt.length ? `<section class="card"><details><summary>✓ ${mt.length} confirmate (le aveai deja, nu le dublez)</summary>
       ${mt.map(([r]) => `<div class="match"><small>Bancă</small><b>${esc(r.desc)} · ${fmt(r.amount)} · ${fmtDate(r.date)}</b><small>Ale tale</small><span>${descOf(r.matchIds)}</span></div>`).join('')}</details></section>` : ''}
-    ${ig.length ? `<section class="card"><details><summary>↔ ${ig.length} transferuri / schimburi valutare (ignorate)</summary>
-      <p class="hint muted">Bifează dacă vreuna e de fapt o cheltuială sau un venit.</p>${ig.map(([r, i]) => impRow(r, i)).join('')}</details></section>` : ''}
+    ${ig.length ? `<section class="card"><details><summary>↔ ${ig.length} transferuri între conturile tale (ignorate)</summary>
+      <p class="hint muted">Economii, pușculițe, schimb valutar: nu sunt nici cheltuieli, nici venituri.
+        Ai mutat ${fmt(ig.filter(([r]) => r.type === 'expense').reduce((a, [r]) => a + r.amount, 0))} spre economii și ai scos
+        ${fmt(ig.filter(([r]) => r.type === 'income').reduce((a, [r]) => a + r.amount, 0))}. Bifează doar dacă vreuna e de fapt o cheltuială sau un venit.</p>${ig.map(([r, i]) => impRow(r, i)).join('')}</details></section>` : ''}
     ${I.missing.length ? `<section class="card warn-card"><h2>Plătite cu cardul, dar nu apar în extras</h2>
       <p class="hint muted">Poate au fost de fapt cash, sau suma e greșită. Apasă pe ele ca să le corectezi după import.</p>
       ${I.missing.map(t => `<div class="row"><span class="ic">${ICON[t.category] || '•'}</span><span class="grow"><b>${esc(t.note || t.category)}</b><small>${fmtDate(t.date)}</small></span><span class="amt">${fmt(t.amount)}</span></div>`).join('')}</section>` : ''}
@@ -254,7 +265,6 @@ function confirmImport() {
     const key = merchantKey(r.desc);
     if (key && r.status !== 'match') {
       if (r.include && (r.status !== 'amb' || r.choice === 'new')) state.rules[key] = {category: r.category, note: r.note};
-      else if (r.status === 'ignored' && !r.include && !/EXCHANGE|SCHIMB|TOPUP|ALIMENTARE/.test(strip(r.rtype))) state.rules[key] = {category: '__ignore', note: ''};
     }
     state.bankSeen.push(r.hash);
   }
@@ -266,6 +276,15 @@ Object.assign(ACTIONS, {
   'bank-pick': () => { closeSheet(); $('#in-bank').click(); },
   'bank-cancel': () => { ui.imp = null; render(); },
   'bank-confirm': confirmImport,
+  'bank-ignore': el => {
+    syncImport();
+    const r = ui.imp.rows[+el.dataset.i], key = transferKey(r.desc);
+    if (key) { state.rules ||= {}; state.rules['ign:' + key] = {category: '__ignore', note: ''}; save(); }
+    // toate rândurile cu același cont (în ambele sensuri) trec la ignorate
+    let n = 0;
+    for (const x of ui.imp.rows) if (x.status === 'new' && transferKey(x.desc) === key) { x.status = 'ignored'; x.internal = true; x.include = false; n++; }
+    render(); toast(`Ignorat: ${n} ${n === 1 ? 'tranzacție' : 'tranzacții'} „${r.desc}”. Data viitoare le ignor automat.`);
+  },
 });
 document.addEventListener('change', async e => {
   const t = e.target;

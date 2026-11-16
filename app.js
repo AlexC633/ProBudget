@@ -1,7 +1,7 @@
 'use strict';
 /* Bugetul Meu — buget personal. Toate datele stau local, pe telefon (localStorage). */
 
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 const KEY = 'bugetul-meu-v1';
 const MONTHS = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
 const MONTHS_SHORT = ['ian','feb','mar','apr','mai','iun','iul','aug','sep','oct','noi','dec'];
