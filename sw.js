@@ -1,5 +1,5 @@
 // Service worker: aplicația merge și fără internet după prima deschidere.
-const CACHE = 'bugetul-meu-1.0'; // schimbă la fiecare versiune
+const CACHE = 'bugetul-meu-1.1'; // schimbă la fiecare versiune
 const SHELL = ['./', './index.html', './styles.css', './app.js', './bank.js', './manifest.json',
   './icon-180.png', './icon-192.png', './icon-512.png'];
 

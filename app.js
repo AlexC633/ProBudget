@@ -1,17 +1,19 @@
 'use strict';
 /* Bugetul Meu — buget personal. Toate datele stau local, pe telefon (localStorage). */
 
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 const KEY = 'bugetul-meu-v1';
 const MONTHS = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
 const MONTHS_SHORT = ['ian','feb','mar','apr','mai','iun','iul','aug','sep','oct','noi','dec'];
 const CATS = {
-  expense: ['Market','Restaurant','Transport','Locuință','Utilități','Abonamente','Sănătate','Haine','Distracție','Cadouri','Altele'],
-  income: ['Salariu','Freelance','Cadouri','Vânzări','Altele'],
+  expense: ['Market','Restaurant','Transport','Locuință','Utilități','Abonamente','Sănătate','Haine','Divertisment','Călătorii','Educație','Îngrijire','Cadouri','Altele'],
+  income: ['Salariu','Venituri active','Venituri pasive','Investiții','Cadouri','Vânzări','Altele'],
 };
 const ICON = {Market:'🛒',Restaurant:'🍽️',Transport:'🚗','Locuință':'🏠','Utilități':'💡',Abonamente:'🔁','Sănătate':'💊',
-  Haine:'👕','Distracție':'🎉',Cadouri:'🎁',Altele:'📦',Salariu:'💼',Freelance:'💻','Vânzări':'🏷️'};
-const COLORS = ['#A2CB8B','#E8F5BD','#D9A55B','#6FA8A0','#7E9F52','#E0896A','#9DB4C0','#B79CD6','#F2CC8F','#C44545','#5B7E3C'];
+  Haine:'👕','Divertisment':'🎉','Călătorii':'✈️','Educație':'📚','Îngrijire':'💇',Cadouri:'🎁',Altele:'📦',Salariu:'💼',
+  'Venituri active':'⚡','Venituri pasive':'🌱','Investiții':'📈',Freelance:'💻','Vânzări':'🏷️'};
+const COLORS = ['#A2CB8B','#E8F5BD','#D9A55B','#6FA8A0','#7E9F52','#E0896A','#9DB4C0','#B79CD6','#F2CC8F','#7FB0D6','#C9B26B','#D98BB0','#C44545','#5B7E3C'];
+const INC_COLORS = ['#A2CB8B','#6FA8A0','#E8F5BD','#F2CC8F','#D98BB0','#D9A55B','#9DB4C0'];
 const CYCLE = {monthly:'lună', yearly:'an', weekly:'săpt.'};
 
 /* ---------- utilitare ---------- */
@@ -50,14 +52,19 @@ function addCycle(iso, cycle, day) {
   const last = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
   return toISO(new Date(t.getFullYear(), t.getMonth(), Math.min(day || d.getDate(), last)));
 }
-const catColor = c => COLORS[Math.max(0, CATS.expense.indexOf(c)) % COLORS.length];
+const catColor = c => CATS.expense.includes(c) ? COLORS[CATS.expense.indexOf(c) % COLORS.length] : INC_COLORS[Math.max(0, CATS.income.indexOf(c)) % INC_COLORS.length];
 const empty = t => `<div class="empty">${t}</div>`;
 
 /* ---------- date ---------- */
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.v === 1) return {transactions: [], subscriptions: [], receipts: [], rules: {}, bankSeen: [], ...s};
+    if (s && s.v === 1) {
+      const st = {transactions: [], subscriptions: [], receipts: [], rules: {}, bankSeen: [], ...s};
+      const MIG = {'Distracție': 'Divertisment', Freelance: 'Venituri active'};
+      for (const x of [...st.transactions, ...st.subscriptions, ...Object.values(st.rules)]) if (MIG[x.category]) x.category = MIG[x.category];
+      return st;
+    }
   } catch {}
   return {v: 1, transactions: [], subscriptions: [], receipts: [], rules: {}, bankSeen: []};
 }
@@ -252,11 +259,20 @@ const PRESETS = {
   'Sănătate': ['Farmacie','Medic','Stomatolog','Analize','Sală'],
   Market: ['Lidl','Kaufland','Mega Image','Carrefour','Profi','Auchan','Penny'],
   Haine: ['Haine','Încălțăminte','Accesorii'],
-  'Distracție': ['Cinema','Concert','Ieșit cu prietenii','Jocuri','Vacanță'],
+  'Divertisment': ['Cinema','Concert','Ieșit cu prietenii','Jocuri','Vacanță'],
   Abonamente: ['Netflix','Spotify','HBO Max','YouTube Premium','iCloud'],
-  Salariu: ['Salariu','Bonus','Prime'],
+  Salariu: ['Salariu fix','Bonus','Prime','Bonuri de masă'],
+  'Venituri active': ['Freelance','Proiecte','Ore suplimentare','Comisioane'],
+  'Venituri pasive': ['Chirie încasată','Dobânzi','Drepturi de autor','Cashback'],
+  'Investiții': ['Dividende','Acțiuni','Crypto','Fonduri'],
+  'Călătorii': ['Cazare','Bilete avion','Excursii'],
+  'Educație': ['Cursuri','Cărți','Școală'],
+  'Îngrijire': ['Frizerie','Cosmetice','Manichiură'],
+  Restaurant: ['Livrare mâncare','Cafenea','Fast-food'],
+  Cadouri: ['Cadou','De la familie','Ziua mea'],
+  'Vânzări': ['OLX','Vânzare online'],
 };
-const FAVORITE_LABEL = {Restaurant: 'Restaurantul tău preferat', Market: 'Magazinul tău preferat', 'Distracție': 'Ce faci cel mai des'};
+const FAVORITE_LABEL = {Restaurant: 'Restaurantul tău preferat', Market: 'Magazinul tău preferat', 'Divertisment': 'Ce faci cel mai des'};
 const groupKey = t => productKey(t.note || '') || '—';
 function noteSuggestions(cat) {
   const freq = {};
@@ -266,7 +282,7 @@ function noteSuggestions(cat) {
   const hist = Object.values(freq).sort((a, b) => b.n - a.n).map(x => x.name);
   const seen = new Set(), out = [];
   for (const n of [...hist, ...(PRESETS[cat] || [])]) { const k = productKey(n); if (!seen.has(k)) { seen.add(k); out.push(n); } }
-  return out.slice(0, 10);
+  return out.slice(0, 12);
 }
 function rangeTest(range) {
   if (range === 'm') return t => monthKey(t.date) === ui.month;
@@ -366,24 +382,71 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = fal
 
 const catOptions = (type, sel) => CATS[type].map(c => `<option ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
 
-const suggChips = cat => noteSuggestions(cat).map(n => `<button type="button" class="chip sm" data-action="pick-note" data-v="${esc(n)}">${esc(n)}</button>`).join('');
+/* ---------- adăugare în pași, cu pictograme ---------- */
+const SUBICON = {'Benzină':'⛽','Abonament STB':'🚌','Metrou':'🚇','Bolt / Uber':'🚕','Taxi':'🚖','Parcare':'🅿️','Rovinietă':'🛣️',
+  'Service auto':'🔧','Tren':'🚆','Avion':'✈️','Curent':'💡','Gaz':'🔥','Apă':'💧','Internet':'🌐','Telefon':'📱','Întreținere':'🏢',
+  'Gunoi':'🗑️','Cablu TV':'📺','Chirie':'🔑','Rată':'🏦','Reparații':'🛠️','Mobilier':'🛋️','Curățenie':'🧽','Farmacie':'💊',
+  'Medic':'🩺','Stomatolog':'🦷','Analize':'🧪','Sală':'🏋️','Haine':'👕','Încălțăminte':'👟','Accesorii':'👜','Cinema':'🎬',
+  'Concert':'🎤','Ieșit cu prietenii':'🍻','Jocuri':'🎮','Vacanță':'🏖️','Netflix':'🎞️','Spotify':'🎧','HBO Max':'📺',
+  'YouTube Premium':'▶️','iCloud':'☁️','Salariu fix':'💼','Bonus':'⭐','Prime':'🏅','Bonuri de masă':'🎫','Freelance':'💻',
+  'Proiecte':'📐','Ore suplimentare':'⏱️','Comisioane':'🤝','Chirie încasată':'🏘️','Dobânzi':'🏦','Drepturi de autor':'©️',
+  'Cashback':'💳','Dividende':'💰','Acțiuni':'📊','Crypto':'🪙','Fonduri':'🧺','Cazare':'🏨','Bilete avion':'✈️','Excursii':'🗺️',
+  'Cursuri':'🎓','Cărți':'📚','Școală':'🏫','Frizerie':'💈','Cosmetice':'🧴','Manichiură':'💅','Lidl':'🛒','Kaufland':'🛒',
+  'Mega Image':'🛒','Carrefour':'🛒','Profi':'🛒','Auchan':'🛒','Penny':'🛒','Livrare mâncare':'🛵','Cafenea':'☕','Fast-food':'🍔',
+  'Vânzare online':'📦','OLX':'🏷️','De la familie':'👨‍👩‍👧','Ziua mea':'🎂','Cadou':'🎁'};
+const CAT_HINT = {Salariu:'fix, bonus, prime','Venituri active':'freelance, proiecte','Venituri pasive':'chirii, dobânzi',
+  'Investiții':'dividende, acțiuni',Cadouri:'de la alții / pentru alții','Vânzări':'OLX, vânzări online',Altele:'orice altceva',
+  Market:'cumpărături',Restaurant:'mâncare în oraș',Transport:'benzină, STB',Locuință:'chirie, rată',Utilități:'curent, gaz, net',
+  Abonamente:'Netflix, Spotify',Sănătate:'farmacie, medic',Haine:'haine, încălțăminte',Divertisment:'cinema, ieșiri',
+  Călătorii:'cazare, bilete',Educație:'cursuri, cărți',Îngrijire:'frizerie, cosmetice'};
+const tint = (c, a) => c + Math.round(a * 255).toString(16).padStart(2, '0');
+
 function openTx(t, presetCat) {
-  const isNew = !t;
-  t = t || {type: CATS.income.includes(presetCat) && !CATS.expense.includes(presetCat) ? 'income' : 'expense', amount: '', category: presetCat || 'Market', note: '',
-    date: ui.month === monthKey(todayISO()) ? todayISO() : ui.month + '-01'};
-  sheet(`<form id="tx-form" data-id="${isNew ? '' : t.id}"><h2>${isNew ? 'Tranzacție nouă' : 'Editează tranzacția'}</h2>
-    <div class="seg"><label><input type="radio" name="type" value="expense" ${t.type === 'expense' ? 'checked' : ''}><span>Cheltuială</span></label>
-      <label><input type="radio" name="type" value="income" ${t.type === 'income' ? 'checked' : ''}><span>Venit</span></label></div>
-    <label>Sumă (lei)<input name="amount" inputmode="decimal" required autocomplete="off" placeholder="0,00" value="${decStr(t.amount)}"></label>
-    <label>Plătit cu</label><div class="seg pay"><label><input type="radio" name="method" value="card" ${t.method !== 'cash' ? 'checked' : ''}><span>💳 Card</span></label>
-      <label><input type="radio" name="method" value="cash" ${t.method === 'cash' ? 'checked' : ''}><span>💵 Cash</span></label></div>
-    ${t.bank ? `<p class="hint ok">✓ Confirmată de bancă: ${esc(t.bank.desc)}</p>` : ''}
-    <label>Categorie<select name="category">${catOptions(t.type, t.category)}</select></label>
-    <label>Data<input type="date" name="date" required value="${t.date}"></label>
-    <label>Detaliu<input name="note" placeholder="ex: Benzină, Abonament STB, Curent, numele restaurantului" value="${esc(t.note)}" autocomplete="off"></label>
-    <div class="sugg" id="sugg">${suggChips(t.category)}</div>
-    ${t.receiptId ? '<p class="hint muted">Tranzacția vine de la un bon scanat. Produsele le editezi din „Scanează”.</p>' : ''}
-    <div class="actions">${isNew ? '' : `<button type="button" class="btn danger" data-action="del-tx" data-id="${t.id}">Șterge</button>`}
+  if (t) ui.add = {step: 3, id: t.id, type: t.type, category: t.category, note: t.note || '', amount: t.amount, date: t.date,
+    method: t.method || 'card', bank: t.bank, receiptId: t.receiptId};
+  else {
+    const date = ui.month === monthKey(todayISO()) ? todayISO() : ui.month + '-01';
+    const type = presetCat && CATS.income.includes(presetCat) && !CATS.expense.includes(presetCat) ? 'income' : 'expense';
+    ui.add = {step: presetCat ? 3 : 1, type, category: presetCat || '', note: '', amount: '', date, method: 'card'};
+  }
+  renderAdd();
+}
+function syncAdd() {
+  const f = $('#tx-form'); if (!f || !ui.add) return;
+  ui.add.amount = f.amount.value; ui.add.note = f.note.value; ui.add.date = f.date.value; ui.add.method = f.method?.value || 'card';
+}
+function renderAdd() {
+  const A = ui.add;
+  if (A.step === 1) return sheet(`<h2>Ce adaugi?</h2>
+    <div class="type-pick">
+      <button class="type-tile exp" data-action="add-type" data-v="expense"><span class="tt-ic">↓</span><b>Cheltuială</b><small>bani care ies</small></button>
+      <button class="type-tile inc" data-action="add-type" data-v="income"><span class="tt-ic">↑</span><b>Venit</b><small>bani care intră</small></button>
+    </div><div class="actions"><button class="btn" data-action="close-sheet">Anulează</button></div>`);
+  if (A.step === 2) return sheet(`<div class="add-head"><button class="back" data-action="add-back">‹</button>
+      <h2>${A.type === 'income' ? 'Ce fel de venit?' : 'Pe ce ai cheltuit?'}</h2></div>
+    <div class="cat-grid">${CATS[A.type].map(c => `<button class="cat-tile ${c === A.category ? 'on' : ''}" data-action="add-cat" data-v="${esc(c)}">
+      <span class="ct-ic" style="background:${tint(catColor(c), .18)};box-shadow:inset 0 0 0 1px ${tint(catColor(c), .35)}">${ICON[c] || '•'}</span>
+      <b>${esc(c)}</b><small>${CAT_HINT[c] || ''}</small></button>`).join('')}</div>`);
+  // pasul 3
+  const sugg = noteSuggestions(A.category);
+  const sel = productKey(A.note);
+  return sheet(`<form id="tx-form" data-id="${A.id || ''}">
+    <input type="hidden" name="type" value="${A.type}"><input type="hidden" name="category" value="${esc(A.category)}">
+    <div class="add-head"><button type="button" class="back" data-action="add-back">‹</button>
+      <button type="button" class="cat-badge" data-action="add-back" style="background:${tint(catColor(A.category), .16)}">
+        <span>${ICON[A.category] || '•'}</span>${esc(A.category)}<small>${A.type === 'income' ? 'venit' : 'cheltuială'} · schimbă</small></button></div>
+    <div class="amount-big ${A.type}"><span>${A.type === 'income' ? '+' : '−'}</span>
+      <input name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${decStr(A.amount)}" aria-label="Sumă"><em>lei</em></div>
+    ${sugg.length ? `<h3 class="sub-h">${A.type === 'income' ? 'De unde?' : 'Pe ce anume?'}</h3>
+      <div class="sub-grid">${sugg.map(n => `<button type="button" class="sub-tile ${productKey(n) === sel ? 'on' : ''}" data-action="pick-note" data-v="${esc(n)}">
+        <span>${SUBICON[n] || ICON[A.category] || '•'}</span>${esc(n)}</button>`).join('')}</div>` : ''}
+    <label>${sugg.length ? 'Sau scrie tu' : 'Detaliu'}<input name="note" autocomplete="off" placeholder="${A.category === 'Restaurant' ? 'numele restaurantului' : 'opțional'}" value="${esc(A.note)}"></label>
+    <div class="row2"><label>Data<input type="date" name="date" required value="${A.date}"></label>
+      ${A.type === 'expense' ? `<div><label>Plătit cu</label><div class="seg pay"><label><input type="radio" name="method" value="card" ${A.method !== 'cash' ? 'checked' : ''}><span>💳 Card</span></label>
+        <label><input type="radio" name="method" value="cash" ${A.method === 'cash' ? 'checked' : ''}><span>💵 Cash</span></label></div></div>` : '<input type="hidden" name="method" value="card">'}</div>
+    ${A.bank ? `<p class="hint ok">✓ Confirmată de bancă: ${esc(A.bank.desc)}</p>` : ''}
+    ${A.receiptId ? '<p class="hint muted">Vine de la un bon scanat. Produsele le editezi din „Scanează”.</p>' : ''}
+    <div class="actions">${A.id ? `<button type="button" class="btn danger" data-action="del-tx" data-id="${A.id}">Șterge</button>` : ''}
       <button type="button" class="btn" data-action="close-sheet">Anulează</button><button class="btn primary">Salvează</button></div></form>`);
 }
 
@@ -635,7 +698,11 @@ const ACTIONS = {
   'detail-back': () => { ui.detail = null; render(); scrollTo(0, 0); },
   'detail-range': el => { ui.detail.range = el.dataset.v; ui.detail.group = null; render(); },
   'detail-group': el => { ui.detail.group = ui.detail.group === el.dataset.k ? null : el.dataset.k; render(); },
-  'pick-note': el => { const f = $('#tx-form'); f.note.value = el.dataset.v; f.amount.value || f.amount.focus(); },
+  'pick-note': el => { const f = $('#tx-form'); f.note.value = el.dataset.v;
+    document.querySelectorAll('.sub-tile').forEach(b => b.classList.toggle('on', b === el)); f.amount.value || f.amount.focus(); },
+  'add-type': el => { ui.add.type = el.dataset.v; ui.add.category = ''; ui.add.step = 2; renderAdd(); },
+  'add-cat': el => { if (ui.add.category !== el.dataset.v) ui.add.note = ''; ui.add.category = el.dataset.v; ui.add.step = 3; renderAdd(); setTimeout(() => $('#tx-form')?.amount.focus(), 250); },
+  'add-back': () => { syncAdd(); ui.add.step = ui.add.id && ui.add.step === 3 ? 2 : Math.max(1, ui.add.step - 1); renderAdd(); },
   month: el => { ui.month = shiftMonth(ui.month, +el.dataset.d); render(); },
   'tx-filter': el => { ui.txFilter = el.dataset.v; render(); },
   'stats-range': el => { ui.statsRange = el.dataset.v; render(); },
@@ -723,12 +790,12 @@ document.addEventListener('submit', e => {
 
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.name === 'type' && t.form?.id === 'tx-form') { t.form.category.innerHTML = catOptions(t.value, t.value === 'income' ? 'Salariu' : 'Market'); $('#sugg').innerHTML = suggChips(t.form.category.value); }
-  if (t.name === 'category' && t.form?.id === 'tx-form') $('#sugg').innerHTML = suggChips(t.value);
   if (t.id === 'in-camera' || t.id === 'in-gallery') { handleImage(t.files[0]); t.value = ''; }
   if (t.id === 'in-import') { if (t.files[0]) importData(t.files[0]); t.value = ''; }
 });
 document.addEventListener('input', e => {
+  if (e.target.name === 'note' && e.target.form?.id === 'tx-form') { const k = productKey(e.target.value);
+    document.querySelectorAll('.sub-tile').forEach(b => b.classList.toggle('on', productKey(b.dataset.v) === k)); }
   if (e.target.closest('#receipt-form') && (e.target.classList.contains('it-price') || e.target.name === 'total')) updateReviewSum();
 });
 
